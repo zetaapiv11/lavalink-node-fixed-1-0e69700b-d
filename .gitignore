@@ -9,3 +9,7 @@ coverage/
 playback-results/
 plugins/
 Lavalink*.jar
+
+# VPS installer private temporary state
+deploy/vps/.install.lock
+deploy/vps/.env.tmp.*

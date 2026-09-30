@@ -128,7 +128,7 @@ If Node 01 cannot play reliably, keep website/API/PostgreSQL on Render and propo
 
 ## 4. VPS Node 02 with TLS
 
-See [docs/vps.md](docs/vps.md). Use `deploy/vps/compose.yaml` and `Caddyfile`; `install-vps.sh` expects Docker already installed and never overwrites secrets/firewall rules. Node identity, hostname, and internal password are separate from Render.
+See [docs/vps.md](docs/vps.md). The one-command bootstrap installs prerequisites on supported Ubuntu/Debian VPS hosts. Answer domain, email and database URL once; `install-vps.sh` generates private credentials and configuration automatically, reuses them on subsequent runs, and checks database readiness plus public HTTPS. DNS, Render account settings and firewall rules remain operator prerequisites. See the guide for the exact command. Node identity, hostname, and internal password are separate from Render.
 
 Port 80 is solely for certificate issuance/redirect. **Never send Authorization or Lavalink passwords to HTTP port 80**, including requests expected to redirect. Encryption starts only after TLS; redirects cannot recover an already exposed credential. Bot/worker URL validation rejects public HTTP origins.
 
