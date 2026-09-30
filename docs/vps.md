@@ -109,3 +109,15 @@ cd /opt/resonance && bash ./install-vps.sh --database-url
 ```
 
 Paste the new URL at the hidden prompt. Only `DATABASE_URL` is replaced atomically, with mode600; node password, monitor token, domain and other settings are preserved. Interrupted input leaves the original file intact. The installer then checks the database and proceeds with normal deployment. This does not create a Render database or run production migrations automatically. Once an external setting is fixed, rerun `bash ./install-vps.sh` normally.
+
+## Connect VPS monitoring to the Render worker without editing .env
+
+An HTTPS-ready VPS can still appear UNKNOWN in the dashboard until the worker has its monitoring URL **and the matching private token**. On the VPS, update the checkout, then run:
+
+```bash
+bash scripts/connect-vps-monitor.sh YOUR_RENDER_WORKSPACE_ID YOUR_RENDER_MONITOR_WORKER_ID
+```
+
+Use the existing workspace and `resonance-monitor` worker IDs from your Render account. Paste a Render API key into the hidden terminal prompt (the key value only, without `Bearer`). Do not send the key or the monitor token through chat. The helper uses the existing Docker image/configuration, verifies the VPS's authenticated stats endpoint, confirms the worker's workspace/repository/type/name, then merges only `NODE_VPS_URL` and `MONITOR_VPS_TOKEN` through Render's HTTPS MCP endpoint. It preserves other environment variables. Render automatically redeploys the worker after the update; wait for a fresh sample in the website dashboard before claiming monitoring is ready.
+
+No `.env` editing, node restart, image build, or password rotation is required. The API key is not saved to disk; it is passed by environment-variable name to a temporary container removed at exit. The existing VPS token is read by Compose from its private environment file and is not printed. Neither credential is sent through redirects. Tests: `node --test tests/connect-vps-monitor.test.mjs`; these exercise synthetic MCP responses, not a real credential transfer from your VPS.
