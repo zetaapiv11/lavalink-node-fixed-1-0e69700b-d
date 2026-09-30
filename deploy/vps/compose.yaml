@@ -1,0 +1,33 @@
+services:
+  audio:
+    build: ../..
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ID: vps
+      PORT: 10000
+      SERVER_PORT: 2333
+      DATABASE_SSL: "true"
+    ports: ["127.0.0.1:10000:10000"]
+    mem_limit: 1800m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    environment:
+      VPS_DOMAIN: ${VPS_DOMAIN:?Set VPS_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      audio: { condition: service_healthy }
+volumes:
+  caddy_data:
+  caddy_config:

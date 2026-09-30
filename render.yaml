@@ -1,32 +1,75 @@
+# One audio gateway instance per node: Lavalink sessions live in memory.
+# Node 01 is UNVERIFIED for audible playback until its live Render test passes.
+databases:
+  - name: resonance-db
+    databaseName: resonance
+    user: resonance
+    plan: 0.1c-256mb
+    region: singapore
+    ipAllowList: [] # Allowlist only the VPS egress IP before external DB access.
 services:
   - type: web
-    name: lavalink-server
+    name: resonance-web
+    runtime: node
+    plan: 0.5c-512mb
+    region: singapore
+    buildCommand: npm ci && npm run build
+    preDeployCommand: npm run migrate
+    startCommand: npm start -- --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 24.14.1
+      - key: DATABASE_URL
+        fromDatabase: { name: resonance-db, property: connectionString }
+      - key: DATABASE_SSL
+        value: "false" # Render private network; VPS must use external verified TLS.
+      - key: APP_ORIGIN
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+  - type: worker
+    name: resonance-monitor
+    runtime: node
+    plan: 0.5c-512mb
+    region: singapore
+    buildCommand: npm ci
+    startCommand: npm run migrate && npm run monitor
+    envVars:
+      - key: NODE_VERSION
+        value: 24.14.1
+      - key: DATABASE_URL
+        fromDatabase: { name: resonance-db, property: connectionString }
+      - key: DATABASE_SSL
+        value: "false"
+      - key: NODE_RENDER_URL
+        sync: false
+      - key: NODE_VPS_URL
+        sync: false
+      - key: MONITOR_RENDER_TOKEN
+        sync: false
+      - key: MONITOR_VPS_TOKEN
+        sync: false
+  - type: web
+    name: resonance-node-01
     runtime: docker
     dockerfilePath: ./Dockerfile
-    plan: standard   # 2 GB RAM / 1 CPU. Kalau CPU sering >80% saat ramai, naik ke pro (4 GB / 2 CPU)
+    plan: 1c-2g
+    region: singapore
+    numInstances: 1
     healthCheckPath: /healthz
     envVars:
+      - key: NODE_ID
+        value: render
       - key: PORT
         value: "10000"
       - key: SERVER_PORT
         value: "2333"
+      - key: DATABASE_URL
+        fromDatabase: { name: resonance-db, property: connectionString }
+      - key: DATABASE_SSL
+        value: "false"
       - key: LAVALINK_SERVER_PASSWORD
+        generateValue: true
+      - key: MONITOR_TOKEN
         sync: false
-      - key: STATS_TOKEN
-        sync: false
-      - key: LAVALINK_NODES
-        sync: false
-      - key: SPOTIFY_CLIENT_ID
-        sync: false
-      - key: SPOTIFY_CLIENT_SECRET
-        sync: false
-      - key: SPOTIFY_COUNTRY_CODE
-        value: "ID"
-      - key: NODE_NAME
-        value: "render"
-      - key: PUBLIC_URL
-        sync: false
-      - key: DISK_PATH
-        value: "/"
-      - key: _JAVA_OPTIONS
-        value: "-Xms512M -Xmx1400M"
