@@ -5,11 +5,11 @@ umask 077
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
 fail() { printf '%s\n' "$*" >&2; exit 1; }
 if [[ ${1:-} == --help ]]; then
-  echo 'Usage: bash install-vps.sh [--configure-only]'
+  echo 'Usage: bash install-vps.sh [--configure-only | --check-database | --database-url]'
   echo 'Meminta domain, email, dan URL PostgreSQL jika .env belum ada. Rahasia dibuat otomatis; konfigurasi lama dipertahankan.'
   exit 0
 fi
-[[ $# == 0 || ( $# == 1 && $1 == --configure-only ) ]] || fail 'Argumen tidak dikenal. Gunakan --help.'
+[[ $# == 0 || ( $# == 1 && ( $1 == --configure-only || $1 == --check-database || $1 == --database-url ) ) ]] || fail 'Argumen tidak dikenal. Gunakan --help.'
 for tool in docker openssl curl flock; do
   command -v "$tool" >/dev/null || fail "Perlu $tool. Gunakan scripts/bootstrap-vps.sh untuk VPS Ubuntu/Debian baru."
 done
@@ -38,6 +38,16 @@ valid_domain() {
     [[ ${#label} -le 63 && $label != -* && $label != *- ]] || return 1
   done
 }
+read_database_url() {
+  while :; do
+    read_value 'External Database URL Render (input disembunyikan): ' true
+    database_url=$REPLY
+    # URI reserved characters in credentials must be percent-encoded.
+    # Single quotes prevent Compose interpolation of literal dollar signs.
+    if [[ $database_url =~ ^postgres(ql)?://[^/]+/[^/?]+(\?.*)?$ && $database_url != *[[:space:][:cntrl:]]* && $database_url != *"'"* && $database_url != *'\'* ]]; then break; fi
+    echo 'Gunakan URL postgres:// atau postgresql:// lengkap; percent-encode karakter khusus dalam kredensial.' >&2
+  done
+}
 if [[ ! -e $config ]]; then
   echo 'Siapkan DNS domain ke IP VPS, port 80/443, dan PostgreSQL Render yang sudah dimigrasi serta mengizinkan IP VPS.'
   while :; do
@@ -52,14 +62,7 @@ if [[ ! -e $config ]]; then
     [[ $email =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]] && break
     echo 'Format email tidak valid.' >&2
   done
-  while :; do
-    read_value 'External Database URL Render (input disembunyikan): ' true
-    database_url=$REPLY
-    # URI reserved characters in credentials must be percent-encoded.
-    # Single quotes prevent Compose interpolation of literal dollar signs.
-    if [[ $database_url =~ ^postgres(ql)?://[^/]+/[^/?]+(\?.*)?$ && $database_url != *[[:space:][:cntrl:]]* && $database_url != *"'"* && $database_url != *'\'* ]]; then break; fi
-    echo 'Gunakan URL postgres:// atau postgresql:// lengkap; percent-encode karakter khusus dalam kredensial.' >&2
-  done
+  read_database_url
   node_password=$(openssl rand -hex 32)
   monitor_token=$(openssl rand -hex 32)
   temp_config=$(mktemp deploy/vps/.env.tmp.XXXXXX)
@@ -76,6 +79,21 @@ if [[ ! -e $config ]]; then
 else
   [[ -f $config && -s $config ]] || fail 'Konfigurasi lama kosong/tidak valid. File dipertahankan; pulihkan dari backup.'
   echo 'Menggunakan konfigurasi yang sudah ada; password tidak dirotasi.'
+  if [[ ${1:-} == --database-url ]]; then
+    read_database_url
+    temp_config=$(mktemp deploy/vps/.env.tmp.XXXXXX)
+    trap 'rm -f -- "${temp_config:-}"' EXIT
+    # Replace only the database URL; never execute config or rotate node secrets.
+    while IFS= read -r line || [[ -n $line ]]; do
+      [[ $line =~ ^[[:space:]]*(export[[:space:]]+)?DATABASE_URL[[:space:]]*= ]] && continue
+      printf '%s\n' "$line"
+    done < "$config" > "$temp_config"
+    printf "DATABASE_URL='%s'\n" "$database_url" >> "$temp_config"
+    chmod 600 "$temp_config"
+    mv -- "$temp_config" "$config"
+    unset database_url REPLY line
+    echo 'URL database diperbarui; password node dan token monitoring tetap sama.'
+  fi
 fi
 chmod 600 "$config"
 # Never source .env as shell code.
@@ -91,17 +109,19 @@ docker info >/dev/null 2>&1 || fail 'Docker daemon tidak dapat diakses. Jalankan
 # Use the shipped database TLS policy; fail without printing a DB URL or raw errors.
 "${compose[@]}" run --rm --no-deps --entrypoint node audio --import tsx --input-type=module -e '
 import { database } from "./lib/db.ts";
+import { databaseDiagnostic } from "./lib/database-diagnostics.ts";
 let db;
 try {
  db = database();
  const result = await db.query({text: "SELECT id FROM nodes WHERE id = $1", values: ["vps"], query_timeout: 10000});
- if (!result.rowCount) throw new Error();
+ if (!result.rowCount) throw Object.assign(new Error(), {code: "DB_NODE_MISSING"});
  console.log("Database TLS dan migrasi: OK");
-} catch {
- console.error("Database belum siap. Periksa External URL, allowlist IP VPS, TLS, dan migrasi Render. Rahasia tidak ditampilkan.");
+} catch (error) {
+ console.error(databaseDiagnostic(error));
  process.exitCode = 1;
 } finally { if (db) await db.end(); }
 ' || fail 'Deployment dihentikan sebelum startup: pemeriksaan database gagal.'
+[[ ${1:-} != --check-database ]] || { echo 'Pemeriksaan database selesai; layanan tidak dijalankan oleh perintah ini.'; exit 0; }
 "${compose[@]}" up -d --wait --wait-timeout 300
 # Verify the public TLS entry point, not only the container health check.
 ready=false

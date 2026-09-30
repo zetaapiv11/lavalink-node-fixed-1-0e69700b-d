@@ -80,3 +80,32 @@ cd /opt/resonance && git pull --ff-only origin coderabbit/build-public-lavalink-
 ```
 
 Run as the same operator/root used for installation. If Git reports local changes or diverged history, stop and inspect them; do not reset the checkout or delete `.env`. If apt still fails, retain the earlier repository error lines (not only the final package messages) and diagnose Docker's outbound DNS/HTTPS connectivity. Do not disable TLS/signature verification or blindly change the host DNS.
+
+## Image built, but database preflight failed
+
+`Image vps-audio Built` followed by a database failure means Docker build succeeded. Do not delete application data or regenerate node passwords. Update this checkout and run only the database check to obtain a safe diagnostic code:
+
+```bash
+cd /opt/resonance && git pull --ff-only origin coderabbit/build-public-lavalink-service/63eaecea && bash ./install-vps.sh --check-database
+```
+
+This builds the current image and checks connectivity/schema, then exits without starting the stack. It does not stop existing services. Only fixed diagnostic messages are shown; no raw PostgreSQL error, URL or password is printed.
+
+| Code | Next action |
+| --- | --- |
+| `DB_URL` / `DB_NAME` | Copy the correct External Database URL from the Render database's Connect menu. |
+| `DB_DNS` | Ensure this is the External URL, not the private Internal URL; verify Docker DNS. |
+| `DB_NETWORK` | Check database availability, VPS egress IP allowlist in Render, and outbound TCP 5432. |
+| `DB_AUTH` | Check current database credentials and Render's allowed IPs; an access denial alone does not prove which is wrong. |
+| `DB_MIGRATION` | Run `npm run migrate` in the Render website service Shell using this database, then retry. |
+| `DB_PERMISSION` | Check application DB role grants. |
+| `DB_TLS` | Check hostname, system clock and certificate chain. Keep verified TLS enabled. |
+| `DB_UNKNOWN` | Cause not classified; investigate privately without sharing raw credentials. |
+
+If the URL was entered incorrectly, no editor is needed:
+
+```bash
+cd /opt/resonance && bash ./install-vps.sh --database-url
+```
+
+Paste the new URL at the hidden prompt. Only `DATABASE_URL` is replaced atomically, with mode600; node password, monitor token, domain and other settings are preserved. Interrupted input leaves the original file intact. The installer then checks the database and proceeds with normal deployment. This does not create a Render database or run production migrations automatically. Once an external setting is fixed, rerun `bash ./install-vps.sh` normally.

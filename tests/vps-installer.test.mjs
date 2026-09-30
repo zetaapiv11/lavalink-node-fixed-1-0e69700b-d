@@ -118,7 +118,35 @@ test('actual database preflight fails cleanly on invalid credentials without exp
     env: { ...process.env, DATABASE_URL: secret, DATABASE_SSL: 'true' },
   });
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /Database belum siap/);
+  assert.match(result.stderr, /\[DB_URL\]/);
   assert.ok(!(result.stdout + result.stderr).includes(secret));
   assert.doesNotMatch(result.stderr, /at new URL/);
+});
+test('database-only mode checks readiness but never starts services', t => {
+  const f = fixture(t); const result = f.run(undefined, ['--check-database']);
+  assert.equal(result.status, 0, f.output(result));
+  const commands = readFileSync(f.log, 'utf8');
+  assert.match(commands, / run /);
+  assert.doesNotMatch(commands, / up /);
+  assert.doesNotMatch(f.output(result), /merespons melalui HTTPS/);
+});
+test('interactive database URL replacement preserves other values and secret permissions', t => {
+  const f = fixture(t); assert.equal(f.run(undefined, ['--configure-only']).status, 0);
+  const before = readFileSync(f.config, 'utf8');
+  const replacement = 'postgresql://new-user:new%23password@external.example.invalid/newdb';
+  const result = f.run(`${replacement}\n`, ['--database-url']);
+  assert.equal(result.status, 0, f.output(result));
+  const after = readFileSync(f.config, 'utf8');
+  assert.equal(statSync(f.config).mode & 0o777, 0o600);
+  assert.equal(after.split('\n').filter(x => x.startsWith('DATABASE_URL=')).length, 1);
+  assert.ok(after.includes(`DATABASE_URL='${replacement}'`));
+  const withoutUrl = text => text.split('\n').filter(x => !x.startsWith('DATABASE_URL=')).join('\n');
+  assert.equal(withoutUrl(after), withoutUrl(before));
+  assert.ok(!f.output(result).includes(replacement));
+});
+test('interrupted database URL replacement leaves previous config intact', t => {
+  const f = fixture(t); assert.equal(f.run(undefined, ['--configure-only']).status, 0);
+  const before = readFileSync(f.config, 'utf8');
+  assert.notEqual(f.run('', ['--database-url']).status, 0);
+  assert.equal(readFileSync(f.config, 'utf8'), before);
 });
