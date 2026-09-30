@@ -1,0 +1,14 @@
+{
+  email {$ACME_EMAIL}
+}
+{$VPS_DOMAIN} {
+  tls {
+    protocols tls1.2 tls1.3
+  }
+  header {
+    Strict-Transport-Security "max-age=31536000"
+    X-Content-Type-Options "nosniff"
+  }
+  reverse_proxy audio:10000
+  # Access logs intentionally disabled; never log auth or protocol payloads.
+}

@@ -1,11 +1,45 @@
 {
-  "name": "discord-bot-lavalink-render-fixed",
-  "version": "1.0.0",
-  "main": "index.js",
+  "name": "resonance-lavalink-service",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
   "scripts": {
-    "start": "node index.js"
+    "dev": "next dev --hostname 0.0.0.0",
+    "build": "next build",
+    "start": "next start --hostname 0.0.0.0",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "test:integration": "tsx --test tests/*.integration.ts",
+    "test:playback": "tsx scripts/playback.ts",
+    "migrate": "tsx scripts/migrate.ts",
+    "admin": "tsx scripts/admin.ts",
+    "monitor": "tsx services/monitor.ts",
+    "gateway": "tsx services/gateway.ts",
+    "bot": "tsx examples/bot.ts",
+    "test:resilience": "tsx --test tests/monitor.resilience.ts"
   },
   "dependencies": {
-    "discord.js": "^14.16.3"
+    "next": "16.3.7",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "discord.js": "14.27.0",
+    "lucide-react": "^0.468.0",
+    "pg": "^8.16.3",
+    "ws": "^8.18.3",
+    "zod": "^4.3.6",
+    "tsx": "^4.21.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.18",
+    "tailwindcss": "^4.1.18",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/pg": "^8.16.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.9.3"
   }
 }
