@@ -6,3 +6,8 @@ playback-results
 output
 *.log
 *.tsbuildinfo
+
+# Keep nested VPS credentials and installer state out of build uploads.
+**/.env
+**/.env.*
+**/.install.lock

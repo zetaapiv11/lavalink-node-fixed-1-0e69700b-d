@@ -1,6 +1,12 @@
 FROM ghcr.io/lavalink-devs/lavalink:4.2.2 AS lavalink
 FROM node:24.14.1-bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends openjdk-17-jre-headless ca-certificates tini && apt-get clean
+# Slim does not include a CA bundle yet. Bootstrap verified HTTPS from the
+# already-pinned official Lavalink image, then install Debian's own CA package.
+COPY --from=lavalink /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get -o Acquire::Retries=3 -o Acquire::https::Timeout=30 -o APT::Update::Error-Mode=any update \
+    && apt-get -o Acquire::Retries=3 -o Acquire::https::Timeout=30 install -y --no-install-recommends openjdk-17-jre-headless ca-certificates tini \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /opt/service
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
