@@ -66,3 +66,17 @@ Gateway DB access is needed to enforce revocation and session ownership. Treat e
 ## Installer verification
 
 Run `npm run test:installer` and `bash -n install-vps.sh scripts/bootstrap-vps.sh`. The installer suite uses real shell subprocesses and cryptographic randomness with synthetic Docker/network commands for failure paths, plus real Docker Compose parsing for URL escaping and secret isolation. It does not prove apt/systemd installation on a fresh VPS, certificate issuance, or audible Discord voice; those need the target host and account access.
+
+## Build fails with “Unable to locate package” / “no installation candidate”
+
+If this happens for Java, ca-certificates and tini together at Dockerfile's apt step, inspect the preceding apt repository download errors. The package messages alone cannot identify DNS, firewall, proxy, or repository availability failures. It is unrelated to old application data; do not delete volumes to fix it. A build warning about missing Git metadata is separate from the fatal apt error.
+
+The image now downloads Debian packages over verified HTTPS with bounded retries, and treats any failed repository update as a build failure. The initial CA bundle comes from the pinned official Lavalink image; Debian's CA package is then installed normally. TLS verification and package signature checks remain enabled.
+
+For the bootstrap's default checkout, update and retry without editing or deleting private configuration:
+
+```bash
+cd /opt/resonance && git pull --ff-only origin coderabbit/build-public-lavalink-service/63eaecea && bash ./install-vps.sh
+```
+
+Run as the same operator/root used for installation. If Git reports local changes or diverged history, stop and inspect them; do not reset the checkout or delete `.env`. If apt still fails, retain the earlier repository error lines (not only the final package messages) and diagnose Docker's outbound DNS/HTTPS connectivity. Do not disable TLS/signature verification or blindly change the host DNS.
